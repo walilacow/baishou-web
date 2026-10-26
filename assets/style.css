@@ -1,0 +1,122 @@
+:root {
+  --bg: #15110d; --panel: #221b14; --panel2: #2b2218; --ink: #f1e6d0; --sub: #b9a98c; --gold: #d8b45a; --red: #c0503d; --green: #6aa66a;
+  --card-w: 88px; --card-h: 124px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { /* 這款遊戲固定深色牌桌 */ } }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
+a { color: var(--gold); }
+button { font: inherit; color: inherit; cursor: pointer; }
+.page { min-height: 100vh; display: flex; flex-direction: column; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+main { flex: 1; width: 100%; max-width: 920px; margin: 0 auto; padding: 16px; }
+.topbar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #0d0a07; border-bottom: 1px solid #3a2e20; position: sticky; top: 0; z-index: 5; }
+.topbar .brand { font-weight: 700; color: var(--gold); text-decoration: none; letter-spacing: .1em; }
+.topbar nav { margin-left: auto; display: flex; gap: 14px; font-size: 14px; white-space: nowrap; }
+.topbar .brand { white-space: nowrap; }
+.beta { background: #6b2f22; color: #ffd9cc; font-size: 12px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.site-footer { padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); font-size: 12px; color: var(--sub); text-align: center; border-top: 1px solid #3a2e20; background: #0d0a07; }
+.site-footer .links { margin-top: 4px; }
+.hero { text-align: center; padding: 28px 0 8px; }
+.hero h1 { font-size: 40px; margin: 0; letter-spacing: .3em; color: var(--gold); font-family: "Songti TC", "Noto Serif TC", serif; }
+.sub { color: var(--sub); margin: 4px 0 16px; }
+.notice { background: #3a2a14; border: 1px solid #6e5420; border-radius: 10px; padding: 10px 14px; font-size: 14px; color: #f0d9a2; }
+.menu { display: grid; gap: 12px; margin-top: 16px; }
+.big { display: flex; flex-direction: column; gap: 2px; padding: 18px 20px; background: var(--panel); border: 1px solid #4a3a26; border-radius: 14px; text-decoration: none; color: var(--ink); }
+.big b { font-size: 20px; color: var(--gold); } .big span { color: var(--sub); font-size: 14px; }
+.big:hover, .big:focus-visible { border-color: var(--gold); outline: none; }
+.primary, .secondary, .decision, .act, .faction { border-radius: 10px; border: 1px solid #6e5420; padding: 10px 16px; background: var(--panel2); }
+.primary { background: var(--gold); color: #20170a; font-weight: 700; border-color: var(--gold); min-height: 44px; }
+.secondary, .decision, .act { min-height: 44px; }
+button:disabled { opacity: .4; cursor: not-allowed; }
+.center { text-align: center; }
+.picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.faction { display: flex; flex-direction: column; text-align: left; min-height: 64px; }
+.faction span { font-size: 12px; color: var(--sub); }
+.faction.on { background: #4a3a1a; border-color: var(--gold); outline: 2px solid var(--gold); }
+h1, h2 { font-family: "Songti TC", "Noto Serif TC", serif; }
+.about { text-align: center; } .about .logo { max-width: 220px; height: auto; background: #f7f1e4; border-radius: 16px; padding: 8px; }
+.about ul { text-align: left; } .card-box { background: var(--panel); border-radius: 12px; padding: 4px 16px; text-align: left; }
+.small { font-size: 12px; color: var(--sub); } .error { color: var(--red); } .muted { color: var(--sub); }
+
+/* 對局 */
+.battle-page main, .battle-root { max-width: none; padding: 0; }
+.battle { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 12px; max-width: 1100px; margin: 0 auto; width: 100%; }
+.side { background: var(--panel); border: 1px solid #3a2e20; border-radius: 10px; padding: 6px 10px; }
+.side .base { display: flex; justify-content: space-between; } .side .meta { font-size: 13px; color: var(--sub); }
+.side .hint { font-size: 12px; color: var(--gold); }
+.bar { height: 6px; background: #3a2e20; border-radius: 3px; overflow: hidden; margin: 4px 0; } .bar i { display: block; height: 100%; background: var(--green); }
+.side.enemy .bar i { background: var(--red); }
+.field { display: flex; flex-wrap: wrap; gap: 6px; min-height: calc(var(--card-h) * .5); align-items: flex-start; justify-content: center; padding: 4px; }
+.field.support { min-height: 0; }
+.status { display: flex; align-items: center; gap: 12px; justify-content: center; }
+.phase { font-weight: 700; color: var(--gold); font-family: "Songti TC", "Noto Serif TC", serif; }
+.turn { color: var(--sub); font-size: 13px; }
+.link { background: none; border: none; color: var(--gold); text-decoration: underline; padding: 4px; }
+.lastlog { text-align: center; font-size: 12px; color: var(--sub); min-height: 1.5em; }
+.hand { display: flex; gap: 6px; overflow-x: auto; padding: 8px 4px 10px; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+.hand .card { flex: 0 0 auto; scroll-snap-align: start; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; padding: 4px 8px; min-height: 52px; }
+.actions .waiting { color: var(--sub); padding: 12px; } .advent { width: 100%; text-align: center; }
+
+.card { position: relative; width: var(--card-w); height: var(--card-h); border-radius: 8px; overflow: hidden; border: 2px solid #4a3a26; background: #2a2118; cursor: pointer; display: flex; flex-direction: column; font-size: 11px; user-select: none; flex-shrink: 0; }
+.card.mini { width: 64px; height: 60px; font-size: 9px; }
+.card .art { flex: 1; background-size: cover; background-position: center; background-color: #3a2e20; min-height: 0; }
+.card .name { padding: 1px 4px; background: #120d08; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .cost { position: absolute; top: 2px; left: 2px; background: #000b; color: #9fd0ff; padding: 0 4px; border-radius: 6px; font-size: 10px; }
+.card .pt { position: absolute; right: 2px; bottom: 16px; background: #000c; color: #fff; padding: 0 5px; border-radius: 6px; font-weight: 700; }
+.card .tp { position: absolute; right: 2px; bottom: 16px; background: #000a; color: var(--sub); padding: 0 5px; border-radius: 6px; font-size: 10px; }
+.card .lvl { position: absolute; top: 2px; right: 2px; background: var(--gold); color: #20170a; padding: 0 4px; border-radius: 6px; font-size: 10px; }
+.card .kw { position: absolute; left: 2px; bottom: 16px; background: #000a; color: var(--gold); padding: 0 4px; border-radius: 6px; font-size: 9px; max-width: 60%; overflow: hidden; white-space: nowrap; }
+.card .dmg { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--red); color: #fff; font-weight: 700; padding: 0 8px; border-radius: 10px; }
+.card.tapped { filter: grayscale(.7) brightness(.7); } .card.dim { opacity: .65; }
+.card.playable { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+.card.selected { transform: translateY(-6px); outline: 3px solid #fff; z-index: 2; }
+.card.attacking { border-color: var(--red); box-shadow: 0 0 10px var(--red); } .card.targeted { outline: 3px dashed var(--red); }
+.card.heal { filter: hue-rotate(80deg); }
+.card.f-tiger { border-left-color: #e08a2c; } .card.f-dragon { border-left-color: #b09040; } .card.f-crane { border-left-color: #7ac; }
+.card.f-wolf { border-left-color: #889; } .card.f-scorpion { border-left-color: #8b4; } .card.f-bat { border-left-color: #a35; } .card.f-jiao { border-left-color: #3ab; }
+
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: #1a1410; border-top: 2px solid var(--gold); padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); max-height: 60vh; overflow: auto; }
+.sheet .close, .logbar .close { position: absolute; right: 10px; top: 8px; background: none; border: none; font-size: 20px; min-width: 44px; min-height: 44px; }
+.sheet-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.d-title { font-size: 20px; font-weight: 700; font-family: "Songti TC", "Noto Serif TC", serif; } .d-type { font-size: 13px; color: var(--sub); font-weight: 400; }
+.d-text, .d-skill, .d-kw { margin: 6px 0; font-size: 14px; } .d-flavor { color: var(--sub); font-style: italic; font-size: 13px; }
+.logpanel { position: fixed; inset: 8% 4% 8% 4%; z-index: 30; background: #120d08ee; border: 1px solid var(--gold); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; }
+.logbar { display: flex; justify-content: space-between; align-items: center; } .loglines { overflow: auto; font-size: 13px; color: var(--sub); }
+.toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: var(--gold); color: #20170a; padding: 8px 16px; border-radius: 999px; z-index: 50; font-weight: 700; }
+
+@media (max-width: 480px) {
+  .beta .b { display: none; } .topbar { gap: 8px; padding: 10px 12px; } .topbar nav { gap: 10px; }
+  :root { --card-w: 78px; --card-h: 110px; }
+  .hero h1 { font-size: 32px; } .topbar nav { gap: 10px; }
+  .card.mini { width: 56px; height: 54px; }
+}
+@media (min-width: 900px) { :root { --card-w: 104px; --card-h: 146px; } .card.mini { width: 76px; height: 70px; font-size: 10px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* 劇情模式 */
+.campaign { max-width: 920px; margin: 0 auto; padding: 16px; }
+.intro { position: relative; min-height: 70vh; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; cursor: pointer; }
+.intro-art { position: absolute; inset: 0; background-size: cover; background-position: center; filter: brightness(.55); }
+.intro-line { position: relative; padding: 24px; font-size: 20px; font-family: "Songti TC", "Noto Serif TC", serif; text-shadow: 0 1px 4px #000; }
+.intro-hint { position: relative; padding: 0 24px 20px; color: var(--sub); font-size: 13px; }
+.skip { position: absolute; top: 10px; left: 10px; }
+.maphead { display: flex; align-items: baseline; gap: 12px; } .maphead .link { margin-left: auto; }
+.stagebar { display: flex; gap: 6px; margin: 8px 0 14px; } .stagebar i { flex: 1; height: 8px; background: #3a2e20; border-radius: 4px; } .stagebar i.done { background: var(--green); } .stagebar i.now { background: var(--gold); }
+.choices, .rewards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin: 10px 0; }
+.choice, .reward { text-align: left; background: var(--panel); border: 1px solid #4a3a26; border-radius: 12px; padding: 12px; position: relative; }
+.choice:hover, .reward:not(:disabled):hover { border-color: var(--gold); }
+.mark { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #555; color: #fff; margin-top: 6px; }
+.mark.danger { background: var(--red); } .mark.sidewind { background: #3d7a6a; } .mark.ally { background: #4a6a9a; }
+.warn { color: #e6a35a; } .story { font-family: "Songti TC", "Noto Serif TC", serif; max-width: 620px; }
+.single { text-align: center; } .cardgrid { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; justify-content: center; }
+.pickcell { width: 150px; display: flex; flex-direction: column; align-items: center; gap: 4px; } .pickcell .small { text-align: center; }
+.kwbox { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+a.button { display: inline-block; padding: 10px 16px; border: 1px solid #6e5420; border-radius: 10px; text-decoration: none; }
+.battle-bar { display: flex; justify-content: space-between; padding: 4px 12px; font-size: 13px; }
+
+/* 觸控目標至少 44px */
+.topbar nav a, .site-footer .links a, .link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 6px; }
+.topbar .brand { display: inline-flex; align-items: center; min-height: 44px; }
+.card:focus-visible, button:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }

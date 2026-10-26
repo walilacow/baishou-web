@@ -1,0 +1,12 @@
+Copyright © 2026 小盜工作室（EngieStudio）. All rights reserved.
+
+All content in this repository — including but not limited to the game program, WebAssembly binary,
+web front-end code, card text, card art, character art, story, and rules — is proprietary.
+No license is granted to copy, modify, redistribute, or use it commercially without prior written permission.
+Viewing and playing the game on the published website is permitted.
+
+（《百獸真經》故事、角色、卡圖與文字未經授權不得轉載或商用。）
+
+Third-party components embedded in the WebAssembly binary:
+- The Swift runtime, Swift standard library and swift-foundation (Apache License 2.0 with Runtime Library Exception),
+  https://www.swift.org / https://github.com/swiftlang

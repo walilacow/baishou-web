@@ -1,0 +1,1 @@
+{"cards":[{"id":"jo_chao_sheng","name":"潮生","type":"character","faction":"jiao","cost":{"generic":1,"jiao":1},"power":1,"toughness":2,"identities":["healer"],"text":"回合開始：你受傷最重的一個角色（中毒的優先）解毒並回 1 氣血。","effects":[{"trigger":"onTurnStart","actions":[{"cure":{"target":"mostWoundedOwnCharacter"}},{"heal":{"amount":1,"target":"mostWoundedOwnCharacter"}}]}],"upgradeFixed":["heal"]}]}
