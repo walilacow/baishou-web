@@ -72,13 +72,24 @@ export class DeckBuilder {
     const problems = this.validate();
     const f = this.filter;
     const deckSorted = this.sortCards([...new Set(this.deck)]);
-    const poolFiltered = this.sortCards(this.pool.filter((id) => {
-      const d = this.def(id); if (!d) return false;
-      if (f.type && d.type !== f.type) return false;
-      if (f.faction && d.faction !== f.faction) return false;
-      if (f.q && !d.name.includes(f.q) && !(d.text ?? '').includes(f.q)) return false;
-      return true;
-    }));
+    const facOrder = [this.mine, ...FACTION_ORDER.filter((x) => x !== this.mine)];
+    const fi = (id) => { const i = facOrder.indexOf(this.def(id)?.faction); return i < 0 ? 99 : i; };
+    const matchQ = (id) => { const d = this.def(id); return !!d && (!f.q || d.name.includes(f.q) || (d.text ?? '').includes(f.q)); };
+    const base = this.pool.filter(matchQ);
+    const facCount = (x) => base.filter((id) => (!f.type || this.def(id).type === f.type) && (!x || this.def(id).faction === x)).length;
+    const typeCount = (t) => base.filter((id) => (!f.faction || this.def(id).faction === f.faction) && (!t || this.def(id).type === t)).length;
+    const poolFiltered = this.sortCards(base.filter((id) => (!f.type || this.def(id).type === f.type) && (!f.faction || this.def(id).faction === f.faction)))
+      .sort((a, b) => fi(a) - fi(b));
+    const chip = (attr, val, label, n, on) => h('button.chip', { type: 'button', [attr]: val, class: (attr === 'data-pf' ? f.faction : f.type) === val ? 'on' : '', 'aria-pressed': String((attr === 'data-pf' ? f.faction : f.type) === val), on: { click: () => { if (attr === 'data-pf') f.faction = val; else f.type = val; this.shown = 80; this.render(); } } }, `${label} ${n}`);
+    const shownList = poolFiltered.slice(0, this.shown);
+    const poolBody = [];
+    let lastF = null, lastT = null;
+    for (const id of shownList) {
+      const d = this.def(id);
+      if (d.faction !== lastF) { lastF = d.faction; lastT = null; poolBody.push(h('h3.pfac', this.fname(d.faction))); }
+      if (d.type !== lastT) { lastT = d.type; poolBody.push(h('h4.ptype', this.tname(d.type))); }
+      poolBody.push(this.row(id, { inDeck: false }));
+    }
     const root = clear(this.root);
     const loadoutRows = Object.keys(this.starter.loadout).concat(FACTION_ORDER.filter((x) => !(x in this.starter.loadout))).filter((x, i, a) => a.indexOf(x) === i).map((fa) => {
       const n = this.loadout[fa] ?? 0;
@@ -106,9 +117,9 @@ export class DeckBuilder {
         h('section.bpool', { id: 'bpool' },
           h('div.bfilters',
             h('input', { type: 'search', id: 'pool-q', placeholder: '搜尋名稱或卡面文字', value: f.q, 'aria-label': '搜尋牌庫', on: { input: (e) => { f.q = e.target.value; this.shown = 80; this.renderKeepFocus(); } } }),
-            h('select', { id: 'pool-type', 'aria-label': '類型', on: { change: (e) => { f.type = e.target.value; this.shown = 80; this.render(); } } }, h('option', { value: '' }, '全部類型'), ...TYPE_ORDER.map((t) => h('option', { value: t, selected: f.type === t }, this.tname(t)))),
-            h('select', { id: 'pool-faction', 'aria-label': '門派', on: { change: (e) => { f.faction = e.target.value; this.shown = 80; this.render(); } } }, h('option', { value: '' }, '全部門派'), ...FACTION_ORDER.map((x) => h('option', { value: x, selected: f.faction === x }, this.fname(x))))),
-          ...poolFiltered.slice(0, this.shown).map((id) => this.row(id, { inDeck: false })),
+            h('div.chips', { id: 'pool-faction', role: 'group', 'aria-label': '門派目錄' }, chip('data-pf', '', '全部門派', facCount(''), 0), ...facOrder.map((x) => chip('data-pf', x, this.fname(x), facCount(x)))),
+            h('div.chips', { id: 'pool-type', role: 'group', 'aria-label': '類型目錄' }, chip('data-pt', '', '全部類型', typeCount(''), 0), ...TYPE_ORDER.map((t) => chip('data-pt', t, this.tname(t), typeCount(t))))),
+          ...poolBody,
           poolFiltered.length > this.shown ? h('button.secondary', { id: 'pool-more', on: { click: () => { this.shown += 80; this.render(); } } }, `再顯示 80 張（還有 ${poolFiltered.length - this.shown} 張，也可以用篩選縮小）`) : null)),
       h('div.bfoot', { id: 'deck-foot' }, h('b', '猜潮信：猜中先手　'),
         h('button.primary', { id: 'build-high', disabled: !ok, on: { click: () => this.onStart(true, this.deck, this.loadout) } }, '猜漲潮開戰'), ' ',

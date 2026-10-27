@@ -261,7 +261,7 @@ async function scenarioBuild(log) {
   // 牌庫是全部的卡：任何門派的卡都找得到（用別派卡）
   q('#tab-pool')?.click();
   const poolCount = qa('#bpool .drow').length; must(poolCount >= 50, '牌庫有牌（顯示前 80 張）');
-  const sel = q('#pool-faction'); sel.value = 'dragon'; sel.dispatchEvent(new Event('change'));
+  q('#pool-faction [data-pf="dragon"]').click();
   await null;
   const target = qa('#bpool .drow').find((r) => window.__engine.cards[r.dataset.card].faction === 'dragon' && window.__engine.cards[r.dataset.card].type === 'character') ?? qa('#bpool .drow')[0];
   const addId = target.dataset.card; log.push(`加入別派的牌：${window.__engine.cards[addId].name}`);

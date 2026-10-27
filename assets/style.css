@@ -193,3 +193,6 @@ a.button { display: inline-block; padding: 10px 16px; border: 1px solid #6e5420;
 .lrow { display: flex; align-items: center; gap: 8px; } .lrow span { flex: 1; white-space: nowrap; min-width: 0; } .lrow b { min-width: 22px; text-align: center; }
 .bfoot { position: sticky; bottom: 0; background: linear-gradient(transparent, var(--bg) 12px); padding: 10px 0 6px; text-align: center; }
 @media (max-width: 760px) { .btabs { display: flex; } .bcols { grid-template-columns: 1fr; } .bcols.show-deck .bpool, .bcols.show-pool .bdeck { display: none; } }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; } .chip { min-height: 34px; padding: 4px 10px; background: #120d08; color: var(--ink); border: 1px solid #4a3a26; border-radius: 999px; font-size: 13px; cursor: pointer; } .chip.on { background: var(--gold); color: #1a120a; border-color: var(--gold); font-weight: 700; }
+.pfac { margin: 14px 0 2px; font-size: 16px; color: var(--gold); border-bottom: 1px solid #4a3a26; padding-bottom: 2px; } .ptype { margin: 8px 0 2px; font-size: 13px; color: var(--sub); }
