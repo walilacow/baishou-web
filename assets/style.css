@@ -189,7 +189,7 @@ a.button { display: inline-block; padding: 10px 16px; border: 1px solid #6e5420;
 .dctl { display: flex; align-items: center; gap: 6px; } .cnt { font-size: 13px; color: var(--gold); min-width: 40px; text-align: right; }
 .step { min-width: 44px; min-height: 44px; font-size: 20px; border-radius: 10px; border: 1px solid #6e5420; background: var(--panel2); }
 .dgroup h3 { margin: 10px 0 2px; font-size: 14px; color: var(--gold); }
-.loadbox { margin-bottom: 8px; } .loadbox summary { cursor: pointer; font-weight: 700; min-height: 32px; } .lgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 28px; }
-.lrow { display: flex; align-items: center; gap: 8px; } .lrow span { flex: 1; white-space: nowrap; } .lrow b { min-width: 22px; text-align: center; }
+.loadbox { margin-bottom: 8px; } .loadbox summary { cursor: pointer; font-weight: 700; min-height: 32px; } .lgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 28px; }
+.lrow { display: flex; align-items: center; gap: 8px; } .lrow span { flex: 1; white-space: nowrap; min-width: 0; } .lrow b { min-width: 22px; text-align: center; }
 .bfoot { position: sticky; bottom: 0; background: linear-gradient(transparent, var(--bg) 12px); padding: 10px 0 6px; text-align: center; }
 @media (max-width: 760px) { .btabs { display: flex; } .bcols { grid-template-columns: 1fr; } .bcols.show-deck .bpool, .bcols.show-pool .bdeck { display: none; } }

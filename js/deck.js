@@ -82,7 +82,7 @@ export class DeckBuilder {
     const root = clear(this.root);
     const loadoutRows = Object.keys(this.starter.loadout).concat(FACTION_ORDER.filter((x) => !(x in this.starter.loadout))).filter((x, i, a) => a.indexOf(x) === i).map((fa) => {
       const n = this.loadout[fa] ?? 0;
-      return h('div.lrow', { 'data-lf': fa }, h('span', `${this.fname(fa)}${fa === this.mine ? '（本門）' : ''}`),
+      return h('div.lrow', { 'data-lf': fa }, h('span', `${this.fname(fa)}`),
         h('button.step', { 'aria-label': `${this.fname(fa)}內功減一張`, 'data-ldec': fa, disabled: n <= 0, on: { click: () => { this.loadout[fa] = n - 1; this.persist(); this.render(); } } }, '−'),
         h('b', { 'data-lcount': fa }, String(n)),
         h('button.step', { 'aria-label': `${this.fname(fa)}內功加一張`, 'data-linc': fa, disabled: this.loadoutTotal() >= this.rules.loadoutMax, on: { click: () => { this.loadout[fa] = n + 1; this.persist(); this.render(); } } }, '＋'));
