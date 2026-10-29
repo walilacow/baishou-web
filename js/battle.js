@@ -387,7 +387,10 @@ export class Battle {
   defenseSummary(legal) {
     const v = this.view;
     const groups = new Map();   // target → { attackers:[], total }
-    for (const [att, tgt] of v.combat.targets) {
+    // 打主建築物的攻擊引擎不記在 targets 裡（只有打角色才有），所以由 attackers 補上，沒有目標的就是打主建築物
+    const tmap = new Map(v.combat.targets.map(([a, t]) => [a, t]));
+    for (const att of v.combat.attackers ?? []) {
+      const tgt = tmap.get(att) ?? -1;
       const g = groups.get(tgt) ?? { names: new Map(), total: 0 };
       const ap = v.enemy.field.find((p) => p.id === att);
       const n = this.engine.cards[ap?.cardID]?.name ?? '攻擊者';
@@ -458,7 +461,7 @@ export class Battle {
       this.guide.push(h('div.defend', { id: 'defend-info' }, h('b', '阻擋結果：'), v.combat.targets.map(([att, blk]) => `${this.nameOf(blk)} 擋 ${this.nameOf(att)}`).join('、'),
         h('div.muted', '現在可以出反招（亮框的招式）；不出就按「承受」，直接結算傷害。')));
     }
-    if ((v.phase === 'response' || v.phase === 'declareBlockers') && v.activeSide === 'enemy' && v.targetCombat && (v.combat?.targets?.length ?? 0) > 0) {
+    if ((v.phase === 'response' || v.phase === 'declareBlockers') && v.activeSide === 'enemy' && v.targetCombat && (v.combat?.attackers?.length ?? 0) > 0) {
       this.guide.push(this.defenseSummary(legal));
     }
     if (v.phase === 'declareAttackers' && v.activeSide === 'player' && v.targetCombat) {

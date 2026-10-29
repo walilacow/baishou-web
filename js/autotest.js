@@ -16,6 +16,7 @@ export function assertNotCovered() {
   if (!/內力 \d+/.test(q('#resbar')?.textContent ?? '')) throw new Error('常駐資源列沒有顯示內力');
 }
 
+export let defenseBoxSeen = 0, baseHitBoxSeen = 0;
 export async function playBattle({ maxSteps = 4000, attack = true, verify = false } = {}) {
   for (let i = 0; i < maxSteps; i++) {
     if (verify && i % 3 === 0 && !q('#btn-over') && window.__battle?.view.acting === 'player') {
@@ -24,6 +25,16 @@ export async function playBattle({ maxSteps = 4000, attack = true, verify = fals
       if (missing.length) throw new Error(`有合法動作畫面上操作不到：${missing.join('；')}`);
     }
     if (q('#btn-over')) return q('#phase').textContent;
+    { // 對手出手、輪到我回應時，一定要有「對手攻擊：誰 → 誰（共 N 點）」摘要（含直接打主建築物）
+      const v = window.__battle?.view;
+      if (v?.targetCombat && v.activeSide === 'enemy' && ['response', 'declareBlockers'].includes(v.phase) && (v.combat?.attackers?.length ?? 0) > 0 && v.acting === 'player') {
+        const box = q('#defend-info');
+        if (!box || !/共 \d+ 點傷害/.test(box.innerText)) throw new Error('防守階段沒有「對手攻擊 … 共 N 點傷害」摘要');
+        if (!(v.combat.targets ?? []).length && !/主建築物/.test(box.innerText)) throw new Error('直接打主建築物時摘要沒寫「主建築物」');
+        defenseBoxSeen++;
+        if (!(v.combat.targets ?? []).length) baseHitBoxSeen++;
+      }
+    }
     // 1) 出牌
     const playable = qa('.hand .card.playable');
     let acted = false;
@@ -122,6 +133,7 @@ async function scenarioBattle(log) {
   const dim = qa('.hand .card.dim')[0];
   if (dim) { dim.click(); await null; const why = q('#why-not')?.textContent ?? ''; must(why.length > 6 && !why.includes('現在沒有可用的動作'), `出不了牌要寫具體原因（實際：${why}）`); q('.sheet .close')?.click(); log.push(`出不了牌的原因：${why}`); }
   const result = await playBattle({ verify: true });
+  log.push(`防守摘要檢查：共 ${defenseBoxSeen} 次，其中直接打主建築物 ${baseHitBoxSeen} 次`);
   must(q('#result-info') && q('#btn-again') && q('#btn-change'), '結算頁有結果說明、再來一局、換門派');
   must(/攻下了|被攻陷了|走火入魔|耐久相同/.test(q('#result-reason')?.textContent ?? ''), `結果要寫白話原因（實際：${q('#result-reason')?.textContent}）`);
   must(parseFloat(getComputedStyle(q('.battle')).paddingBottom) >= 20, '場面底部有留白');
