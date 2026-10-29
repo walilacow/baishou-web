@@ -196,3 +196,11 @@ a.button { display: inline-block; padding: 10px 16px; border: 1px solid #6e5420;
 
 .chips { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; } .chip { min-height: 34px; padding: 4px 10px; background: #120d08; color: var(--ink); border: 1px solid #4a3a26; border-radius: 999px; font-size: 13px; cursor: pointer; } .chip.on { background: var(--gold); color: #1a120a; border-color: var(--gold); font-weight: 700; }
 .pfac { margin: 14px 0 2px; font-size: 16px; color: var(--gold); border-bottom: 1px solid #4a3a26; padding-bottom: 2px; } .ptype { margin: 8px 0 2px; font-size: 13px; color: var(--sub); }
+
+/* 寬螢幕：對局左右少留白；點牌的說明放在右側空白處，不蓋住牌桌與手牌 */
+@media (min-width: 900px) {
+  .battle { max-width: 1700px; padding-left: 16px; padding-right: 16px; }
+  .battle.with-sheet { padding-right: 372px; }
+  .battle-root .sheet { left: auto; right: 12px; top: 64px; bottom: 12px; width: 340px; max-height: none; border: 2px solid var(--gold); border-radius: 12px; }
+}
+@media (min-width: 1500px) { :root { --card-h: clamp(110px, 18vh, 168px); } }

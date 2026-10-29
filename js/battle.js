@@ -237,7 +237,7 @@ export class Battle {
     const handScroll = this.root.querySelector('.hand')?.scrollLeft ?? 0;
     const bar = this.actionBar(myTurn, legal);
     const root = clear(this.root);
-    const wrap = h('div.battle');
+    const wrap = h('div.battle' + (this.selected ? '.with-sheet' : ''));
 
     // 敵方
     wrap.append(this.sidePanel(v.enemy, 'enemy'));
