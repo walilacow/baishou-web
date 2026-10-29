@@ -200,6 +200,32 @@ async function scenarioHumanAttack(log) {
 }
 
 /** 防守：敵方打我的輕功角色時，畫面要寫清楚誰打誰、有「閃」按鈕，按了真的閃開（打在主建築物上）。 */
+/** 我方一張牌都不出、只按結束回合：對手一定會直接打主建築物，防守階段也要有「對手攻擊 … → 你的主建築物（共 N 點）」摘要。 */
+async function scenarioIdleBase(log) {
+  await startFixedBattle('tiger', 'wolf');
+  let checked = 0, lastKey = '';
+  for (let i = 0; i < 1500; i++) {
+    const b = window.__battle;
+    if (q('#btn-over')) break;
+    if (b.view.acting !== 'player') { await sleep(5); continue; }
+    const v = b.view;
+    const key = `${v.turn}/${v.enemyTurn}/${v.phase}/${(v.combat?.attackers ?? []).join(',')}`;
+    if (key !== lastKey && v.activeSide === 'enemy' && (v.combat?.attackers?.length ?? 0) > 0) {
+      lastKey = key;
+      log.push(`防守畫面：phase=${v.phase} targetCombat=${v.targetCombat} attackers=${JSON.stringify(v.combat.attackers)} targets=${JSON.stringify(v.combat.targets)}`);
+      const box = q('#defend-info');
+      must(box, '直接打主建築物時防守階段要有摘要框（#defend-info）');
+      must(/主建築物（共 \d+ 點傷害/.test(box.innerText), `摘要要寫「→ 你的主建築物（共 N 點傷害）」（實際：${box.innerText.replace(/\n/g, ' ')}）`);
+      log.push(`摘要：${box.innerText.replace(/\n/g, ' ')}`);
+      if (++checked >= 5) return;
+    }
+    const dec = q('.decision'); if (dec) { dec.click(); await null; continue; }
+    const pass = q('#btn-pass'); if (pass) { pass.click(); await null; continue; }
+    await sleep(20);
+  }
+  must(checked > 0, '1500 步內對手沒有打出攻擊');
+}
+
 async function scenarioHumanDefend(log) {
   await startFixedBattle('crane', 'wolf');
   for (let i = 0; i < 1500; i++) {
@@ -311,13 +337,14 @@ async function scenarioBuild(log) {
 async function runScenario() {
   const name = new URLSearchParams(location.search).get('autotest');
   if (name?.startsWith('shot-')) return runShot(name.slice(5));
-  if (!['battle', 'human-attack', 'human-defend', 'build', 'fuzz'].includes(name)) return;
+  if (!['battle', 'human-attack', 'human-defend', 'idle-base', 'build', 'fuzz'].includes(name)) return;
   const log = [`scenario=${name}`];
   try {
     if (name === 'battle') await scenarioBattle(log);
     else if (name === 'fuzz') await scenarioFuzz(log);
     else if (name === 'human-attack') await scenarioHumanAttack(log);
     else if (name === 'human-defend') await scenarioHumanDefend(log);
+    else if (name === 'idle-base') await scenarioIdleBase(log);
     else if (name === 'build') await scenarioBuild(log);
     report(log, true);
   } catch (err) { log.push(String(err.stack ?? err), `引擎局面：${(() => { try { const v = window.__engine.call({ cmd: 'state' }).view; return `acting=${v.acting} phase=${v.phase} active=${v.activeSide} turn=${v.turn}/${v.enemyTurn} UI=${window.__battle?.view?.acting}/${window.__battle?.view?.phase}`; } catch (e) { return String(e); } })()}`, `頁面文字：${document.body.innerText.slice(0, 200).replace(/\n/g, ' ')}`); report(log, false); }

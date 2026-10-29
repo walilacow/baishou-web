@@ -37,7 +37,8 @@ function pickPage() {
   const out = h('div');
   const tides = [h('button.primary', { id: 'guess-high', disabled: true, on: { click: () => startBattle(mine, theirs, true) } }, '猜漲潮'),
     h('button.primary', { id: 'guess-low', disabled: true, on: { click: () => startBattle(mine, theirs, false) } }, '猜退潮')];
-  const refresh = () => { for (const t of tides) t.disabled = !(mine && theirs); hint.textContent = mine && theirs ? '' : '先選好你的門派和對手門派。'; };
+  const refresh = () => { for (const t of tides) t.disabled = !(mine && theirs); hint.textContent = mine && theirs ? '' : '先選好你的門派和對手門派。'; buildHint.textContent = mine && theirs ? '' : '要先選好你的門派和對手門派，才能組牌。'; };
+  const buildHint = h('p.muted.center', { id: 'build-hint' }, '要先選好你的門派和對手門派，才能組牌。');
   const hint = h('p.muted.center', { id: 'pick-hint' }, '先選好你的門派和對手門派。');
   function pickRow(title, id, set) {
     const row = h('div.picker', { id });
@@ -53,7 +54,7 @@ function pickPage() {
   const build = h('button.secondary', { id: 'go-build', disabled: true, on: { click: () => { location.hash = `#/build/${mine}/${theirs}`; } } }, '自己組牌（任意換牌）');
 
   out.append(pickRow('你的門派（基本牌組）', 'pick-mine', (k) => { mine = k; build.disabled = !(mine && theirs); }), pickRow('對手門派', 'pick-theirs', (k) => { theirs = k; build.disabled = !(mine && theirs); }),
-    h('section.center', h('h2', '開戰'), h('p.muted', '用基本牌組直接開戰，或先自己組牌：牌庫是全部的卡，任意增減。'), h('div.center', build), h('h3', '猜潮信：猜中先手'), h('p.muted', '擲一次潮信決定誰先出手：猜中的一方先手，兩個選項機會一樣。'), h('div.center', ...tides.flatMap((t) => [t, ' '])), hint,
+    h('section.center', h('h2', '開戰'), h('p.muted', '用基本牌組直接開戰，或先自己組牌：牌庫是全部的卡，任意增減。'), h('div.center', build), buildHint, h('h3', '猜潮信：猜中先手'), h('p.muted', '擲一次潮信決定誰先出手：猜中的一方先手，兩個選項機會一樣。'), h('div.center', ...tides.flatMap((t) => [t, ' '])), hint,
       h('div.center', h('button.secondary', { on: { click: () => {
         const r = () => FACTIONS[Math.floor(Math.random() * FACTIONS.length)][0];
         startBattle(r(), r(), Math.random() < 0.5);
