@@ -1,4 +1,5 @@
 // 載入 wasm 引擎（CardGameCore 編成 WebAssembly），用 JSON 指令呼叫。規則全在引擎裡，這裡只傳話。
+import { loadFX } from './fx.js';
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
@@ -79,6 +80,7 @@ export class Engine {
     await Promise.all(names.map(async (n) => { files[n] = await (await fetchRetry(`${base}/data/${n}`)).text(); }));
     this.call({ cmd: 'init', files });
     try { this.artSet = new Set(await (await fetch(`${base}/art/index.json`)).json()); } catch { this.artSet = new Set(); }
+    await loadFX(base);
     const c = this.call({ cmd: 'cards' });
     this.cards = c.cards; this.bases = c.bases; this.keywords = c.keywords; this.factionNames = c.factionNames; this.typeNames = c.typeNames;
   }

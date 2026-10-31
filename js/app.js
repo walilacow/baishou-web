@@ -68,18 +68,19 @@ function buildPage(mine, theirs) {
   return shell(root);
 }
 
-function startBattle(player, enemy, guess = Math.random() < 0.5, custom = null) {
+function startBattle(player, enemy, guess = Math.random() < 0.5, custom = null, scenario = null) {
   window.scrollTo(0, 0);
   const fixed = Number(new URLSearchParams(location.search).get('seed'));   // 測試用：?seed= 固定局種子
   const seed = fixed > 0 ? fixed : randomSeed();
-  const snap = engine.call({ cmd: 'newBattle', player, enemy, seed, guessHighTide: guess, ...(custom ? { deck: custom.deck, loadout: custom.loadout } : {}) });
+  let snap = engine.call({ cmd: 'newBattle', player, enemy, seed: scenario ? 1 : seed, guessHighTide: guess, ...(custom ? { deck: custom.deck, loadout: custom.loadout } : {}) });
+  if (scenario) snap = engine.call({ cmd: 'scenario', scenario });
   const root = h('div.battle-root');
   const tide = (snap.events ?? []).find((e) => e.firstSideDecided)?.firstSideDecided;
   if (tide) toast(`潮信擲出「${tide.result ? '漲' : '退'}」，你猜${tide.guess ? '漲' : '退'}，${tide.first === 'player' ? '猜中，你先手' : '沒猜中，對手先手'}`);
   current = new Battle(engine, root, snap, {
     exitLabel: '回首頁',
     onAgain: () => startBattle(player, enemy, Math.random() < 0.5, custom),
-    onChange: () => { location.hash = custom ? `#/build/${player}/${enemy}` : '#/pick'; },
+    onChange: () => { const to = custom ? `#/build/${player}/${enemy}` : '#/pick'; if (location.hash === to) route(); else location.hash = to; },   // 網址沒變（快速開戰停在 #/pick）不會觸發 hashchange，要自己重畫
     onExit: () => { location.hash = '#/'; },
     onEnd: (result) => { toast({ playerWon: '你贏了！', playerLost: '你輸了', draw: '平手' }[result] ?? '對局結束'); },
   });
@@ -104,6 +105,10 @@ function aboutPage() {
 
 function loading(msg) { clear(app).append(h('div.page', h('main', h('p.center', { id: 'loading' }, msg)))); }
 
+// 本機專用可重現情境：只在 localhost／127.0.0.1 且網址帶 ?scenario=poison|heal|formation|dodge 才生效，正式站上沒有入口
+const SCENARIOS = { poison: ['scorpion', 'wolf'], heal: ['crane', 'wolf'], formation: ['wolf', 'wolf'], dodge: ['crane', 'wolf'] };
+const SCENARIO = ['localhost', '127.0.0.1'].includes(location.hostname) ? new URLSearchParams(location.search).get('scenario') : null;
+let scenarioLaunched = false;
 let routeSeq = 0;
 async function route() {
   const seq = ++routeSeq;
@@ -118,6 +123,7 @@ async function route() {
     window.__engine = engine;
   }
   if (seq !== routeSeq) return;   // 載入期間又換了頁：只畫最新那一次
+  if (SCENARIO && SCENARIOS[SCENARIO] && !scenarioLaunched) { scenarioLaunched = true; startBattle(...SCENARIOS[SCENARIO], true, null, SCENARIO); return; }
   if (hash === '#/about') clear(app).append(aboutPage());
   else if (hash === '#/pick') clear(app).append(pickPage());
   else if (hash.startsWith('#/build/')) { const [, , m, t] = hash.split('/'); clear(app).append(buildPage(m, t)); }

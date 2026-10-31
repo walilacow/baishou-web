@@ -1,6 +1,7 @@
 import { h, clear, toast } from './ui.js';
 
 import { costText, costTotal, SHORT } from './cost.js';
+import { playEvents, fxSetting, setFX } from './fx.js';
 export { costText };
 const PHASE_TITLE = {
   main1: ['我方回合 · 主階段', '對手回合 · 主階段'],
@@ -42,9 +43,12 @@ export function cardEl(engine, cardID, { perm = null, instance = null, mini = fa
   },
   art,
   h('div.name', def.name + (upg ? ` +${upg}` : '')),
+  def.text && !mini ? h('div.ctext', def.text) : null,   // 4:3 卡圖下方多出的空間放卡面文字前幾行（完整說明點開看）
   def.cost && costText(def.cost) ? h('div.cost', costText(def.cost)) : null,
   isChar ? h('div.pt', perm ? `${perm.power}/${Math.max(0, perm.toughness - perm.damage)}` : `${def.power ?? 0}/${def.toughness ?? 0}`) : h('div.tp', engine.typeNames[def.type] ?? def.type),
   perm && lvl > 1 ? h('div.lvl', `Lv${lvl}`) : null,
+  perm?.convalescing ? h('div.convalesce', { title: '療傷中：不能行動，時間到會把傷兵區指定的角色拉回場上' }, `療傷中${perm.convalescenceTurns != null ? `・剩 ${perm.convalescenceTurns} 回合` : ''}`) : null,
+  perm?.poison > 0 ? h('div.poison', { title: `中毒 ${perm.poison} 層：控制者每個回合開始，這個角色永久 −0/−${perm.poison}` }, `☠${perm.poison}`) : null,
   perm?.fresh ? h('div.fresh', { title: '剛上場保護：到對手下一個回合結束前，敵方角色不能指定它為攻擊目標' }, '保護') : null,
   perm && perm.keywords?.length ? h('div.kw', perm.keywords.map((k) => engine.keywords.find((x) => x.id === k)?.name ?? k).join('·')) : null);
   return el;
@@ -57,6 +61,7 @@ export function cardDetail(engine, cardID, perm = null) {
   return h('div.detail-body',
     h('div.d-title', def.name, h('span.d-type', ` ${engine.factionNames[def.faction] ?? ''} · ${engine.typeNames[def.type] ?? def.type}`)),
     costText(def.cost) ? h('div.d-cost', `內力：${costText(def.cost)}`) : null,
+    perm?.poison > 0 ? h('div.d-poison', `☠ 中毒 ${perm.poison} 層：控制者每個回合開始，這個角色永久 −0/−${perm.poison}`) : null,
     def.type === 'character' ? h('div.d-pt', perm ? `攻 ${perm.power}／氣血 ${perm.toughness - perm.damage}（上限 ${perm.toughness}）` : `攻 ${def.power ?? 0}／氣血 ${def.toughness ?? 0}`) : null,
     def.text ? h('p.d-text', def.text) : null,
     ...(def.skills ?? []).map((s) => h('p.d-skill', h('b', `技能・${s.name}`), costText(s.cost) ? `（內力 ${costText(s.cost)}）` : '', s.text ? `：${s.text}` : '')),
@@ -84,6 +89,7 @@ export class Battle {
   get view() { return this.snap.view; }
 
   apply_(snap, animate = true) {
+    const prevSnap = this.snap;
     this.snap = snap;
     {   // 手牌整理：這個回合新抽到的牌（含開局後第一回合之後新進手的）放最右；其餘照類別排，內功最左
       const ids = snap.view.player.hand.map((c) => c.id);
@@ -107,8 +113,36 @@ export class Battle {
       if (l.trim()) this.logLines.push(l);
     }
     if (this.logLines.length > 400) this.logLines.splice(0, this.logLines.length - 400);
+    // 我方角色在這次更新中不見了（對手出場效果、被打倒、反擊等）：明講哪個、為什麼，不然只靠紀錄一行很容易漏看
+    this.lostNote = null;
+    if (prevSnap?.view) {
+      const nowIds = new Set(snap.view.player.field.map((p) => p.id));
+      const gone = prevSnap.view.player.field.filter((p) => !nowIds.has(p.id) && this.engine.cards[p.cardID]?.type === 'character' && !snap.view.player.hand.some((c) => c.id === p.id));
+      if (gone.length) {
+        const names = gone.map((p) => this.engine.cards[p.cardID]?.name ?? '角色');
+        const why = (snap.log ?? []).map((l) => l.replace(/\s*\[[a-zA-Z0-9]+\]\s*$/, '').replace(/([一-鿿A-Za-z0-9]+)#\d+/g, '$1')).filter((l) => names.some((n) => l.includes(n)) && /傷害|擊倒|重傷|退場|摧毀|崩/.test(l));
+        const line = (why[0] ?? '').replace(/^[\s└├│─]+/, '').trim();
+        const killed = line.match(/^(.+?) 被 (.+?) 的傷害打退/);   // 「毒針手 被 狼頭 的傷害打退」→「你的毒針手被狼頭打倒了」
+        this.lostNote = killed && names.length === 1 ? `你的${names[0]}被${killed[2]}打倒了` : `你的${names.join('、')}退場了${line ? `（${line}）` : ''}`;
+      }
+    }
     this.opts.onSnap?.(snap);
+    // 特效：重畫前先記下每張卡的位置（被打倒的卡重畫後就不在了，火花還是要打在它原本的位置）
+    const before = new Map();
+    if (animate) for (const el of this.root.querySelectorAll('.card[data-id]')) if (el.dataset.id) before.set(Number(el.dataset.id), el.getBoundingClientRect());
     this.render();
+    if (animate) {
+      const q = (sel) => this.root.querySelector(sel);
+      const rectOf = (r) => ({ getBoundingClientRect: () => r });
+      const perms = new Map([...(prevSnap?.view?.player.field ?? []), ...(prevSnap?.view?.enemy.field ?? []), ...snap.view.player.field, ...snap.view.enemy.field].map((p) => [p.id, p]));
+      this.lastFX = playEvents(snap.events, {
+        find: (id) => q(`.card[data-id="${id}"]`) ?? (before.has(id) ? rectOf(before.get(id)) : null),
+        panel: (side) => q(`[data-testid=${side}-panel]`),
+        mana: () => q('#resbar'),
+        field: (side) => q(side === 'player' ? '.my-field' : '.enemy-field'),
+        perm: (id) => perms.get(id),
+      });
+    }
     if (snap.over && !this.ended) { this.ended = true; this.opts.onEnd?.(snap.view.result, snap); }
   }
 
@@ -126,16 +160,16 @@ export class Battle {
   }
 
   // ---- 名稱 ----
-  nameOf(id) {
+  nameOf(id, short = false) {
     if (id === -1) return `${this.view.player.baseName}（主建築物）`;
     if (id === -2) return `${this.view.enemy.baseName}（主建築物）`;
     for (const side of [this.view.player, this.view.enemy]) {
-      const p = side.field.find((x) => x.id === id) ?? side.hand.find((x) => x.id === id);
+      const p = side.field.find((x) => x.id === id) ?? side.hand.find((x) => x.id === id) ?? (side.wounded ?? []).find((x) => x.id === id);
       if (p) {
         const name = this.engine.cards[p.cardID]?.name ?? p.cardID;
         const same = side.field.filter((x) => x.cardID === p.cardID && this.engine.cards[x.cardID]?.type === 'character');
         // 同名角色：標「左起第 N 隻（攻/血）」才分得出是誰
-        if (same.length > 1 && side.field.includes(p)) return `${name}（左起第${same.findIndex((x) => x.id === id) + 1}隻，${p.power}/${p.toughness - p.damage}）`;
+        if (same.length > 1 && side.field.includes(p)) return short ? `${name}（第${same.findIndex((x) => x.id === id) + 1}隻）` : `${name}（左起第${same.findIndex((x) => x.id === id) + 1}隻，${p.power}/${p.toughness - p.damage}）`;
         return name;
       }
     }
@@ -150,6 +184,7 @@ export class Battle {
       case 'playInnerArt': case 'castCard': return { zone: 'hand', id: v.card };
       case 'equip': return { zone: 'hand', id: v.weapon };
       case 'useSkill': return { zone: 'field', id: v.character };
+      case 'assignFormationSlot': return { zone: 'field', id: v.entity };
       case 'attack': return { zone: 'field', id: v.attacker };
       default: return null;
     }
@@ -160,7 +195,11 @@ export class Battle {
     const tg = (ids) => (ids?.length ? ` → ${ids.map((i) => this.nameOf(i)).join('、')}` : '');
     switch (k) {
       case 'playInnerArt': return '修練（每回合一張）';
-      case 'castCard': return `出牌${tg(v.targets)}`;
+      case 'castCard': {
+        const d = this.engine.cards[this.view.player.hand.find((c) => c.id === v.card)?.cardID];
+        if (d?.type === 'formation') return v.targets?.length ? `出牌，並讓 ${v.targets.map((i) => this.nameOf(i)).join('、')} 站上陣位` : '出牌（先不放陣腳，之後再逐個站上去）';
+        return `出牌${tg(v.targets)}`;
+      }
       case 'equip': return `裝備給 ${this.nameOf(v.to)}`;
       case 'useSkill': {
         const p = this.findField(v.character);
@@ -176,6 +215,8 @@ export class Battle {
       case 'acceptAdventure': return '收下';
       case 'declineAdventure': return '婉拒';
       case 'dismantleFormation': return '收回陣腳';
+      case 'assignFormationSlot': return `站上「${this.engine.cards[v.formationID]?.name ?? v.formationID}」第 ${v.slot + 1} 個陣位`;
+      case 'discardFormation': return `棄掉${v.size === 'big' ? '大' : '小'}陣（${this.engine.cards[(v.size === 'big' ? this.view.player.bigFormation : this.view.player.smallFormation)?.formationID]?.name ?? ''}）`;
       case 'declareAttackers': return v._0.length ? `全員攻擊（${v._0.length} 人）` : '不攻擊';
       case 'declareBlockers': return v._0.length ? `阻擋（${v._0.map((b) => `${this.nameOf(b.blocker)} 擋 ${this.nameOf(b.attacker)}`).join('、')}）` : '不阻擋';
       default: return k;
@@ -184,7 +225,7 @@ export class Battle {
 
   findField(id) { return this.view.player.field.find((x) => x.id === id) ?? this.view.enemy.field.find((x) => x.id === id); }
 
-  attackedBy() { return new Map((this.view.combat?.targets ?? []).map(([att, tgt]) => [att, tgt])); }
+  attackedBy() { const dodged = new Set(this.view.combat?.dodged ?? []); return new Map((this.view.combat?.targets ?? []).filter(([att]) => !dodged.has(att)).map(([att, tgt]) => [att, tgt])); }   // 已閃開的不再標原目標
 
   // ---- 畫面 ----
   /** 重畫前記下焦點在哪（哪張卡／哪顆按鈕），重畫後放回去，鍵盤使用者才不會每按一次就掉到頁面頂端。 */
@@ -248,8 +289,9 @@ export class Battle {
     const idx = v.activeSide === 'player' ? 0 : 1;
     let title = (PHASE_TITLE[v.phase] ?? ['', ''])[v.phase === 'response' || v.phase === 'declareBlockers' ? (v.activeSide === 'player' ? 0 : 1) : idx];
     if (v.result) title = { playerWon: '你贏了！', playerLost: '你輸了', draw: '平手（僵局）' }[v.result] ?? '對局結束';
-    wrap.append(h('div.status', h('div.phase', { id: 'phase' }, title), h('div.turn', `第 ${v.turn + v.enemyTurn} 回合`), h('button.link', { on: { click: () => this.toggleLog() } }, '紀錄'), CHEAT ? h('button.link', { id: 'cheat-win', title: '測試用', on: { click: () => this.apply_(this.engine.call({ cmd: 'cheat' })) } }, '[測試]對方剩1血') : null));
+    wrap.append(h('div.status', h('div.phase', { id: 'phase' }, title), h('div.turn', `第 ${v.turn + v.enemyTurn} 回合`), h('button.link', { on: { click: () => this.toggleLog() } }, '紀錄'), h('button.link', { id: 'fx-toggle', 'aria-pressed': String(fxSetting()), title: '命中火花、刀光、內力光點、結算橫幅等特效；系統開了「減少動態效果」時一律不播', on: { click: () => { setFX(!fxSetting()); this.render(); } } }, `特效：${fxSetting() ? '開' : '關'}`), CHEAT ? h('button.link', { id: 'cheat-win', title: '測試用', on: { click: () => this.apply_(this.engine.call({ cmd: 'cheat' })) } }, '[測試]對方剩1血') : null));
     wrap.append(h('div.lastlog', { id: 'lastlog', 'aria-live': 'polite' }, this.logLines.slice(-2).join('　')));
+    if (this.lostNote) wrap.append(h('div.lostnote', { id: 'lost-note', role: 'status' }, '⚠ ' + this.lostNote));
     if (this.guide.length) wrap.append(h('div.guide', ...this.guide));
 
     // 我方
@@ -268,7 +310,35 @@ export class Battle {
     const hand = wrap.querySelector('.hand'); if (hand) hand.scrollLeft = handScroll;   // 出牌後保留手牌捲動位置
     if (this.selected) root.append(this.detailSheet(legal));
     if (this.logOpen) { root.append(this.logPanel()); const lp = root.querySelector('.logpanel'); lp?.querySelector('.loglines')?.scrollTo(0, 1e9); lp?.focus(); }
+    this.fitCards();
     this.floatFeedback();
+  }
+
+  /**
+   * 卡片高度配合視窗：整個牌桌比視窗高時，底部固定的操作區（內力列＋按鈕＋手牌）會蓋住我方場上角色。
+   * 先用樣式表的預設卡高量一次，超出多少就平均從三排卡（敵方場上、我方場上、手牌）扣掉，最小 64px；量到放得下為止。放得下就維持預設卡高。
+   */
+  fitCards() {
+    const host = this.root;
+    if (!this.fitBound) { this.fitBound = true; addEventListener('resize', () => { if (host.isConnected) this.fitCards(); }); }
+    host.style.removeProperty('--card-h'); host.style.removeProperty('--card-w');
+    // 要放得下的是「頁首到我方資訊欄底」加上底部操作區（頁尾的版權列不算，捲下去才看）；用文件座標算，跟目前捲到哪裡無關
+    const overflow = () => {
+      const panel = host.querySelector('[data-testid=player-panel]'), dock = host.querySelector('.dock');
+      if (!panel || !dock) return 0;
+      return panel.getBoundingClientRect().bottom + scrollY + 6 + dock.getBoundingClientRect().height - innerHeight;
+    };
+    for (let i = 0; i < 4; i++) {
+      const over = overflow();
+      if (over <= 0) break;
+      const cur = host.querySelector('.my-field .card:not(.mini), .hand .card, .enemy-field .card:not(.mini)')?.getBoundingClientRect().height;
+      if (!cur) break;
+      const z = parseFloat(getComputedStyle(host.querySelector('.battle')).zoom) || 1;   // 寬螢幕放大時量到的是放大後的高
+      const next = Math.max(64, Math.floor(cur / z - Math.ceil(over / z / 3) - 1));
+      if (next >= cur / z) break;
+      host.style.setProperty('--card-h', `${next}px`); host.style.setProperty('--card-w', `${Math.round(next * 0.71)}px`);
+      if (next === 64) break;
+    }
   }
 
   /** 手牌排序：舊卡照類別從左到右（內功最左、角色、招式、裝備…），同類依費用再依名稱；新抽到的牌依抽牌順序接在最右。 */
@@ -307,7 +377,11 @@ export class Battle {
   }
 
   formationText(s) {
-    const f = [s.smallFormation, s.bigFormation].filter(Boolean).map((x) => this.engine.cards[x.formationID]?.name ?? x.formationID);
+    const f = [s.smallFormation, s.bigFormation].filter(Boolean).map((x) => {
+      const who = (x.slots ?? []).map((id) => (id == null ? '空' : this.nameOf(id, true))).join('、');
+      const filled = (x.slots ?? []).filter((id) => id != null).length;
+      return `${this.engine.cards[x.formationID]?.name ?? x.formationID}（${x.active ? '已啟動' : `${filled}/${(x.slots ?? []).length}，陣位：${who}`}）`;
+    });
     return f.length ? `　陣：${f.join('、')}` : '';
   }
 
@@ -315,12 +389,21 @@ export class Battle {
     const attacking = this.view.combat?.attackers?.includes(p.id);
     const targeted = [...this.attackedBy().values()].includes(p.id);
     const sel = this.selected?.zone === 'field' && this.selected.id === p.id;
+    const selPerm = this.selected?.zone === 'field' ? this.findField(this.selected.id) : null;
+    const paired = !!selPerm && !sel && (selPerm.attachedTo === p.id || p.attachedTo === selPerm.id);   // 選了裝備就亮出它的持有者，選了角色就亮出它的裝備
     const el = cardEl(this.engine, p.cardID, {
       perm: p, mini, selected: sel,
-      hint: [subjects.has(`field:${p.id}`) ? 'playable' : '', attacking || this.atk?.has(p.id) ? 'attacking' : '', targeted ? 'targeted' : '', p.convalescing ? 'heal' : ''].join(' '),
+      hint: [subjects.has(`field:${p.id}`) ? 'playable' : '', attacking || this.atk?.has(p.id) ? 'attacking' : '', targeted ? 'targeted' : '', paired ? 'paired' : '', p.convalescing ? 'heal' : ''].join(' '),
       onClick: () => { this.selected = { zone: 'field', id: p.id, who }; this.render(); },
     });
     if (p.damage) el.append(h('div.dmg', `-${p.damage}`));
+    // 裝備在誰身上：裝備卡寫「裝備於 X」，角色卡寫身上有哪些裝備
+    const side = who === 'enemy' ? this.view.enemy : this.view.player;
+    if (p.attachedTo != null) el.append(h('div.attach', `裝備於 ${this.nameOf(p.attachedTo, true)}`));
+    else {
+      const gear = side.field.filter((e) => e.attachedTo === p.id).map((e) => this.engine.cards[e.cardID]?.name).filter(Boolean);
+      if (gear.length) el.append(h('div.gear', `⚔ ${gear.join('、')}`));
+    }
     return el;
   }
 
@@ -377,6 +460,7 @@ export class Battle {
       return '現在沒有合法的目標或條件不符（例如場上還沒有可以選的對象）。';
     }
     if (perm?.convalescing) return '療傷中，不能行動。';
+    if (sel.zone === 'field' && [v.player.smallFormation, v.player.bigFormation].some((f) => f?.assignedThisTurn && !f.active)) return '這張陣圖本回合已補過位了（每張陣圖每回合只能補位 1 次），下回合再放。';
     if (perm?.attacked) return '這回合已經攻擊過了。';
     if (perm?.sick) return '剛出場，下回合才能攻擊（有「迅捷」才能當回合攻擊）。';
     if (!['declareAttackers', 'main1'].includes(v.phase)) return '現在不是攻擊階段。';
@@ -389,8 +473,10 @@ export class Battle {
     const groups = new Map();   // target → { attackers:[], total }
     // 打主建築物的攻擊引擎不記在 targets 裡（只有打角色才有），所以由 attackers 補上，沒有目標的就是打主建築物
     const tmap = new Map(v.combat.targets.map(([a, t]) => [a, t]));
+    const dodged = new Set(v.combat.dodged ?? []);   // 已經閃開的：那一擊改打你的主建築物
     for (const att of v.combat.attackers ?? []) {
-      const tgt = tmap.get(att) ?? -1;
+      let tgt = dodged.has(att) ? -1 : (tmap.get(att) ?? -1);
+      if (tgt !== -1 && !v.player.field.some((p) => p.id === tgt)) tgt = -1;   // 目標已不在場上（死了／被改向）：那一擊打的是主建築物，不寫「某個角色」
       const g = groups.get(tgt) ?? { names: new Map(), total: 0 };
       const ap = v.enemy.field.find((p) => p.id === att);
       const n = this.engine.cards[ap?.cardID]?.name ?? '攻擊者';
@@ -405,8 +491,9 @@ export class Battle {
       return `${who} → ${this.nameOf(tgt)}（共 ${g.total} 點傷害${after}）`;
     });
     const canDodge = (legal ?? []).some((a) => a.dodge);
+    const hasDodged = dodged.size > 0;
     return h('div.defend', { id: 'defend-info' }, h('b', '對手攻擊：'), ...lines.map((l) => h('div', l)),
-      h('div.muted', canDodge ? '你的輕功角色可以「閃」：那一擊改打你的主建築物。不閃就按「承受」。' : '你沒有可以閃的角色，只能按「承受」。（有「破陣」的攻擊者，溢出的傷害會打到你的主建築物。）'));
+      h('div.muted', canDodge ? '你的輕功角色可以「閃」：那一擊改打你的主建築物。不閃就按「承受」。' : (hasDodged ? '已經閃開的那幾擊改打你的主建築物；沒有其他可以閃的了，按「承受」結算。' : '你沒有可以閃的角色，只能按「承受」。（有「破陣」的攻擊者，溢出的傷害會打到你的主建築物。）')));
   }
 
   /** 結算回饋：傷害飄字（卡上 −N、主建築物耐久 −N）。 */
@@ -416,7 +503,7 @@ export class Battle {
       const target = d.target != null && d.target > 0 ? this.root.querySelector(`.card[data-id="${d.target}"]`) : this.root.querySelector(`[data-testid=${d.side}-panel]`);
       if (!target) continue;
       const f = h('div.float', `−${d.amount}`);
-      target.append(f); setTimeout(() => f.remove(), 1600);
+      target.append(f); setTimeout(() => f.remove(), 3200);
     }
   }
 
@@ -454,6 +541,11 @@ export class Battle {
     for (const a of nonSubject) {
       const k = Object.keys(a)[0];
       if (k === 'pass') continue;
+      if (a.discardFormation) {   // 棄陣不能反悔：要再按一次確認
+        const armed = this.discardArmed === true;
+        bar.append(h('button.decision.warnbtn', { on: { click: () => { if (armed) { this.discardArmed = false; this.act(a); } else { this.discardArmed = true; setTimeout(() => { if (this.discardArmed) { this.discardArmed = false; this.render(); } }, 4000); this.render(); } } } }, armed ? `再按一次確認：${this.actionLabel(a)}` : this.actionLabel(a)));
+        continue;
+      }
       bar.append(h('button.decision', { on: { click: () => this.act(a) } }, this.actionLabel(a)));
     }
     // 防守階段：寫清楚誰打誰，以及這個階段能做什麼（新攻防制沒有阻擋，只有輕功角色可以「閃」）
@@ -504,6 +596,7 @@ export class Battle {
     const sheet = h('div.sheet', { role: 'dialog', 'aria-modal': 'true', 'aria-label': '卡片資訊', on: { keydown: (e) => { if (e.key === 'Escape') { this.selected = null; this.render(); } } } },
       h('button.close', { 'aria-label': '關閉', on: { click: () => { this.selected = null; this.render(); } } }, '✕'),
       cardDetail(this.engine, cardID, perm),
+      perm?.attachedTo != null ? h('div.small', { id: 'attach-note' }, `裝備在：${this.nameOf(perm.attachedTo)}`) : null,
       atkOpt ? h('div.sheet-actions', h('button.act', { 'data-atk': sel.id, on: { click: () => { if (this.atk.has(sel.id)) this.atk.delete(sel.id); else this.atk.add(sel.id); this.selected = null; this.render(); } } }, this.atk.has(sel.id) ? '取消出戰' : '出戰')) :
       blockOpt ? h('div.sheet-actions', ...blockOpt.attackers.map((att) => h('button.act', { 'data-block': att, on: { click: () => { this.plan.set(sel.id, att); this.selected = null; this.render(); } } }, `擋 ${this.nameOf(att)}${this.plan.get(sel.id) === att ? '（已選）' : ''}`)),
         this.plan.has(sel.id) ? h('button.act', { on: { click: () => { this.plan.delete(sel.id); this.selected = null; this.render(); } } }, '這個角色不擋') : null) :
@@ -519,6 +612,7 @@ export class Battle {
       const label = this.actionLabel(a);
       const subj = this.subjectOf(a);
       if (k === 'pass') { if (!this.root.querySelector('#btn-pass')) missing.push(`${k}`); continue; }
+      if (label === k) { missing.push(`${k}:沒有中文標籤`); continue; }
       if (!subj && k === 'declareAttackers' && this.root.querySelector('#btn-atk')) continue;
       if (!subj && k === 'declareBlockers' && this.root.querySelector('#btn-block')) continue;   // 防禦計畫的「確認阻擋」
       if (!subj) { if (![...this.root.querySelectorAll('.decision')].some((b) => b.textContent === label)) missing.push(`${k}:${label}`); continue; }

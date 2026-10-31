@@ -200,7 +200,56 @@ a.button { display: inline-block; padding: 10px 16px; border: 1px solid #6e5420;
 /* 寬螢幕：對局左右少留白；點牌的說明放在右側空白處，不蓋住牌桌與手牌 */
 @media (min-width: 900px) {
   .battle { max-width: 1700px; padding-left: 16px; padding-right: 16px; }
-  .battle.with-sheet { padding-right: 372px; }
   .battle-root .sheet { left: auto; right: 12px; top: 64px; bottom: 12px; width: 340px; max-height: none; border: 2px solid var(--gold); border-radius: 12px; }
 }
-@media (min-width: 1500px) { :root { --card-h: clamp(110px, 18vh, 168px); } }
+/* 以電腦為主：大螢幕整個對局（含點牌說明面板）放大，卡面小字也跟著放大，不要一堆空白 */
+.battle-root { --z: 1; } .battle { zoom: var(--z); }
+@media (min-width: 900px) { .battle.with-sheet { padding-right: 372px; } .battle-root .sheet { zoom: var(--z); } }
+/* 900px 以下（手機、很窄的視窗）：點牌說明用底部抽屜，高度壓在 45vh，上面的牌桌還看得到 */
+@media (max-width: 899px) { .battle-root .sheet { max-height: 45vh; } }
+.decision.warnbtn { border-color: #c0503d; }
+@media (min-width: 1500px) { .battle-root { --z: 1.25; } .battle { max-width: 1900px; } }
+@media (min-width: 1900px) { .battle-root { --z: 1.5; } .battle { max-width: 2200px; } }
+@media (min-width: 2500px) { .battle-root { --z: 2; } }
+
+.card .attach, .card .gear { position: absolute; left: 0; right: 0; top: 0; background: #000b; color: var(--gold); font-size: 10px; line-height: 1.25; padding: 1px 3px; text-align: center; z-index: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .gear { top: auto; bottom: 14px; background: #3a2a0acc; color: #ffe6a8; }
+
+.card .attach { white-space: normal; max-height: 3.4em; } .card.paired { outline: 3px solid var(--gold); outline-offset: 1px; }
+
+.card .poison { position: absolute; top: 14px; right: 2px; background: #2f6b2fe6; color: #d9ffd0; font-size: 11px; font-weight: 700; padding: 0 5px; border-radius: 8px; z-index: 2; }
+.d-poison { color: #9be08f; font-size: 13px; margin: 4px 0; }
+.card .convalesce { position: absolute; left: 0; right: 0; top: 30%; background: #1f5f4fe6; color: #d6fff1; font-size: 11px; font-weight: 700; text-align: center; padding: 1px 2px; z-index: 2; }
+.lostnote { background: #4a1f18; border: 1px solid var(--red); color: #ffd9cf; border-radius: 8px; padding: 6px 10px; text-align: center; font-size: 14px; margin: 2px auto; max-width: 760px; }
+
+/* 卡圖 4:3 滿版（與試玩版 App、卡冊同一套）：卡圖區固定 4:3、不裁不留邊；卡名與數值在卡圖下方 */
+.card .art { flex: none; width: 100%; aspect-ratio: 4 / 3; background-size: 100% 100%; }
+.card .ctext { flex: 1; min-height: 0; overflow: hidden; padding: 1px 4px 2px; font-size: .82em; line-height: 1.25; color: var(--sub); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.card.mini .ctext { display: none; }
+.card .pt, .card .tp, .card .kw { bottom: auto; top: calc((var(--card-w) - 4px) * .75 - 1.5em); }
+.card.mini .pt, .card.mini .tp, .card.mini .kw { top: auto; bottom: 14px; }
+
+/* 華麗特效圖層：固定在畫面上、不攔點擊 */
+#fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
+.fx { position: fixed; background: center / 100% 100% no-repeat; mask-size: 100% 100%; -webkit-mask-size: 100% 100%; animation-fill-mode: both; animation-timing-function: ease-out; will-change: transform, opacity; }
+@keyframes fx-burst { from { transform: scale(.4) rotate(0); opacity: 1; } to { transform: scale(1.3) rotate(20deg); opacity: 0; } }
+@keyframes fx-slash { from { transform: translate(-40%, -40%) rotate(28deg) scaleX(.2); opacity: 0; } 30% { opacity: 1; } to { transform: translate(30%, 30%) rotate(28deg) scaleX(1); opacity: 0; } }
+@keyframes fx-ripple { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.15); opacity: 0; } }
+@keyframes fx-ring { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+@keyframes fx-fade { from { opacity: 0; transform: scale(.96); } 25% { opacity: 1; } to { opacity: 0; transform: scale(1); } }
+@keyframes fx-drift { from { transform: translateX(-20px); opacity: .9; } to { transform: translateX(40px) translateY(-10px); opacity: 0; } }
+@keyframes fx-rise { from { transform: translateY(14px) scale(.7); opacity: 0; } 30% { opacity: 1; } to { transform: translateY(-26px) scale(1); opacity: 0; } }
+@keyframes fx-glyph { from { transform: scale(.5) rotate(-30deg); opacity: 0; } 40% { opacity: .9; } to { transform: scale(1.1) rotate(10deg); opacity: 0; } }
+@keyframes fx-rays { from { transform: scale(.6) rotate(0); opacity: 0; } 20% { opacity: .9; } 75% { opacity: .7; } to { transform: scale(1.1) rotate(25deg); opacity: 0; } }
+@keyframes fx-banner { from { transform: scale(.7); opacity: 0; } 15% { transform: scale(1.04); opacity: 1; } 80% { transform: scale(1); opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #fx-layer { display: none; } }
+
+/* 牌桌塞進視窗（不讓底部操作區蓋住我方角色）：雙方資訊欄在寬螢幕排成一行、沒有東西的支援列不佔高度；卡高由 battle.js fitCards() 依視窗再調 */
+.field.support:empty { display: none; }
+@media (min-width: 700px) {
+  .battle .side { display: flex; flex-wrap: wrap; align-items: center; column-gap: 14px; row-gap: 0; padding: 4px 10px; }
+  .battle .side .base { gap: 12px; }
+  .battle .side .bar { flex: 1 1 140px; min-width: 140px; margin: 0; }
+  .battle .side .meta, .battle .side .arts { font-size: 12px; }
+  .battle .side .hint { flex-basis: 100%; }
+}

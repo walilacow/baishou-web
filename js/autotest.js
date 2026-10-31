@@ -16,11 +16,14 @@ export function assertNotCovered() {
   if (!/內力 \d+/.test(q('#resbar')?.textContent ?? '')) throw new Error('常駐資源列沒有顯示內力');
 }
 
-export let defenseBoxSeen = 0, baseHitBoxSeen = 0;
+const OCCL = new URLSearchParams(location.search).has('occl');   // 指定視窗大小跑時（Web/tests/viewport.mjs）每幾步檢查一次場上卡片有沒有被遮
+export let occlChecked = 0;
+export let gearSeen = 0, defenseBoxSeen = 0, baseHitBoxSeen = 0;
 export async function playBattle({ maxSteps = 4000, attack = true, verify = false } = {}) {
   for (let i = 0; i < maxSteps; i++) {
     if (verify && i % 3 === 0 && !q('#btn-over') && window.__battle?.view.acting === 'player') {
       assertNotCovered();
+      if (OCCL) { const o = occlusion(`第 ${i} 步`); if (o.bad.length) throw new Error(`${o.size} ${o.tag}卡片被遮：${o.bad.join('；')}`); occlChecked++; }
       const missing = window.__battle.unreachableActions();
       if (missing.length) throw new Error(`有合法動作畫面上操作不到：${missing.join('；')}`);
     }
@@ -34,6 +37,11 @@ export async function playBattle({ maxSteps = 4000, attack = true, verify = fals
         defenseBoxSeen++;
         if (!(v.combat.targets ?? []).length) baseHitBoxSeen++;
       }
+    }
+    { // 場上有裝備掛在角色身上時，畫面要標出「裝備於 誰」與角色身上有什麼
+      const v = window.__battle?.view;
+      const n = [...(v?.player.field ?? []), ...(v?.enemy.field ?? [])].filter((p) => p.attachedTo != null).length;
+      if (n) { must(qa('.card .attach').length >= n, `有 ${n} 件裝備掛在角色身上，畫面只標了 ${qa('.card .attach').length} 件「裝備於」`); must(qa('.card .gear').length >= 1, '角色卡要標出身上的裝備'); gearSeen++; }
     }
     // 1) 出牌
     const playable = qa('.hand .card.playable');
@@ -133,7 +141,13 @@ async function scenarioBattle(log) {
   const dim = qa('.hand .card.dim')[0];
   if (dim) { dim.click(); await null; const why = q('#why-not')?.textContent ?? ''; must(why.length > 6 && !why.includes('現在沒有可用的動作'), `出不了牌要寫具體原因（實際：${why}）`); q('.sheet .close')?.click(); log.push(`出不了牌的原因：${why}`); }
   const result = await playBattle({ verify: true });
-  log.push(`防守摘要檢查：共 ${defenseBoxSeen} 次，其中直接打主建築物 ${baseHitBoxSeen} 次`);
+  if (result === '你贏了！' || result === '你輸了') {   // 結算橫幅（勝利另加金光）
+    const fx = window.__battle?.lastFX ?? [];
+    must(fx.includes(result === '你贏了！' ? 'banner_victory' : 'banner_defeat'), `分出勝負要播結算橫幅（實際：${fx}）`);
+    log.push(`結算特效：${fx.filter((x) => /banner|rays/.test(x)).join(',')}`);
+  }
+  if (OCCL) log.push(`遮擋檢查 ${innerWidth}×${innerHeight}：整局 ${occlChecked} 個畫面都沒有卡片被遮`);
+  log.push(`裝備標示檢查：${gearSeen} 個畫面；`); log.push(`防守摘要檢查：共 ${defenseBoxSeen} 次，其中直接打主建築物 ${baseHitBoxSeen} 次`);
   must(q('#result-info') && q('#btn-again') && q('#btn-change'), '結算頁有結果說明、再來一局、換門派');
   must(/攻下了|被攻陷了|走火入魔|耐久相同/.test(q('#result-reason')?.textContent ?? ''), `結果要寫白話原因（實際：${q('#result-reason')?.textContent}）`);
   must(parseFloat(getComputedStyle(q('.battle')).paddingBottom) >= 20, '場面底部有留白');
@@ -148,6 +162,9 @@ async function scenarioBattle(log) {
   log.push(`結果：${result}；${q('.turn').textContent}（每個合法動作都有對應按鈕）`);
   must(['你贏了！', '你輸了', '平手（僵局）'].includes(result), '出現勝負頁');
   must(q('#btn-over'), '勝負頁有回首頁按鈕');
+  q('.logpanel .close')?.click(); await null;
+  q('#btn-change').click(); await waitFor('#pick-mine');   // 快速開戰的局網址本來就停在 #/pick，「換門派」也要回到選門派畫面
+  log.push('換門派：回到選門派畫面');
 }
 
 
@@ -226,6 +243,103 @@ async function scenarioIdleBase(log) {
   must(checked > 0, '1500 步內對手沒有打出攻擊');
 }
 
+/** 能裝備就裝備地打一場：場上出現「裝備於 誰」時，裝備卡與角色卡都要標出來（e2e 內檢查在 playBattle 裡）。 */
+async function scenarioGear(log) {
+  for (const f of ['tiger', 'dragon', 'crane']) {
+    gearSeen = 0;
+    await startFixedBattle(f, 'wolf');
+    await playBattle({ verify: false });
+    log.push(`${f} 對局裝備畫面 ${gearSeen} 個`);
+    if (gearSeen > 0) return;
+    location.hash = '#/pick'; await waitFor('#pick-mine');
+  }
+  must(false, '三場都沒出現裝備掛在角色身上的畫面，無法驗證標示');
+}
+
+/** 版面遮擋：場上角色卡要整張落在上方標題列與下方固定操作區（內力列＋按鈕＋手牌）之間，手牌要在畫面內。回傳問題清單。 */
+function occlusion(tag) {
+  const vh = window.innerHeight, vw = window.innerWidth;
+  const top = q('.topbar')?.getBoundingClientRect().bottom ?? 0;
+  const dock = q('.dock')?.getBoundingClientRect(); const dockTop = dock ? dock.top : vh;
+  const bad = [];
+  for (const el of qa('.my-field .card, .enemy-field .card, .my-support .card, .enemy-support .card, [data-testid=player-panel], [data-testid=enemy-panel]')) {
+    const r = el.getBoundingClientRect();
+    if (r.top < top - 0.5 || r.bottom > dockTop + 0.5 || r.left < -0.5 || r.right > vw + 0.5) bad.push(`${el.getAttribute('aria-label') ?? el.dataset.testid}(${Math.round(r.top)}–${Math.round(r.bottom)}，可見 ${Math.round(top)}–${Math.round(dockTop)})`);
+  }
+  for (const el of qa('.hand .card')) { const r = el.getBoundingClientRect(); if (r.bottom > vh + 0.5 || r.top < dockTop - 0.5) bad.push(`手牌${el.getAttribute('aria-label')}(${Math.round(r.top)}–${Math.round(r.bottom)}，畫面高 ${vh})`); }
+  if (bad.length) bad.push('版面：' + [...q('.battle').children].map((c) => `${c.className.split(' ')[0]}=${Math.round(c.getBoundingClientRect().height)}`).join(' ') + ` gap=${getComputedStyle(q('.battle')).rowGap} card-h=${getComputedStyle(document.documentElement).getPropertyValue('--card-h')}`);
+  return { tag, size: `${vw}×${vh}`, bad };
+}
+
+/** 本機可重現情境（?scenario=poison|heal|formation，只在 localhost）：固定場面下驗中毒層數、療傷、陣法的畫面。 */
+async function scenarioFixed(log) {
+  const name = new URLSearchParams(location.search).get('scenario');
+  await waitFor('.hand .card, .my-field .card');
+  const b = window.__battle;
+  const noMissing = (tag) => { const m = b.unreachableActions(); must(!m.length, `${tag}：有合法動作畫面上操作不到或沒有中文標籤：${m.join('；')}`); };
+  noMissing(`${name} 開局`);
+  if (name === 'poison') {
+    must(qa('.card .poison').length >= 1, '敵方有中毒角色，卡面要標出中毒層數（☠N）');
+    log.push(`中毒標示：${qa('.card .poison').map((e) => e.textContent).join(',')}`);
+    if (OCCL) {   // 放得下時不能無故縮卡（頁尾版權列不算進牌桌高度）
+      const ch = q('.my-field .card').getBoundingClientRect().height;
+      log.push(`卡高 ${innerWidth}×${innerHeight}：${Math.round(ch)}px`);
+      if (innerHeight >= 760 && innerWidth >= 900) must(ch >= 96, `視窗夠高卡片卻被縮到 ${Math.round(ch)}px`);
+    }
+    if (OCCL) { const o = occlusion('開局'); log.push(`遮擋檢查 ${o.size} 開局：${o.bad.length ? o.bad.join('；') : '無'}`); must(!o.bad.length, `${o.size} 開局卡片被遮：${o.bad.join('；')}`); }
+    q('#btn-pass').click(); await sleep(50);
+    if (OCCL) { const o = occlusion('攻擊提示'); log.push(`遮擋檢查 ${o.size} 攻擊提示：${o.bad.length ? o.bad.join('；') : '無'}`); must(!o.bad.length, `${o.size} 出現攻擊提示時卡片被遮：${o.bad.join('；')}`); }
+    const mine = qa('.my-field .card.playable'); must(mine.length, '淬毒角色可以攻擊'); mine[mine.length - 1].click(); await sleep(50);
+    const act = qa('.sheet .act:not(.disabled)').find((x) => x.textContent.startsWith('攻擊 →')); must(act, '有攻擊目標按鈕'); act.click(); await sleep(50);
+    const mineBefore = b.view.player.field.length;
+    q('#btn-pass').click();
+    // 特效元素要真的在跑動畫（只看名稱會在動畫沒接上時照樣綠）
+    const live = qa('#fx-layer .fx');
+    must(live.length >= 2, `命中當下特效圖層要有元素（實際 ${live.length}）`);
+    must(live.every((e) => getComputedStyle(e).animationName !== 'none' && e.getAnimations().length === 1), `特效要套上動畫（實際：${live.map((e) => `${e.dataset.fx}:${getComputedStyle(e).animationName}`).join(',')}）`);
+    log.push(`特效動畫：${live.map((e) => `${e.dataset.fx}:${getComputedStyle(e).animationName}`).join(',')}`);
+    await sleep(300);
+    // 華麗特效：命中要有門派火花與刀光（素材在 art/fx/）；卡圖區要是 4:3
+    must((b.lastFX ?? []).some((x) => x.startsWith('spark_')) && b.lastFX.includes('slash_body'), `攻擊命中要播火花與刀光（實際：${b.lastFX}）`);
+    log.push(`命中特效：${b.lastFX.join(',')}`);
+    q('#fx-toggle').click(); await null;   // 設定關掉後要記住、按鈕寫「關」
+    must(q('#fx-toggle').textContent === '特效：關' && localStorage.getItem('fancyFX') === 'off', '特效開關可以關');
+    {   // 關掉時同樣的事件一律不播
+      const fx = await import('./fx.js'); const target = q('.card');
+      const ev = [{ damageDealt: { amount: 2, target: 1, side: 'enemy', sourceFaction: 'wolf' } }];
+      const ctx = { find: () => target, panel: () => null, mana: () => null, field: () => null, perm: () => null };
+      const n0 = qa('#fx-layer .fx').length;
+      must(fx.playEvents(ev, ctx).length === 0 && qa('#fx-layer .fx').length === n0, '特效關掉時不能播');
+    }
+    q('#fx-toggle').click(); await null; must(q('#fx-toggle').textContent === '特效：開', '特效開關可以再打開');
+    const art = q('.my-field .card .art, .enemy-field .card .art').getBoundingClientRect();
+    must(Math.abs(art.width / art.height - 4 / 3) < 0.04, `卡圖區要是 4:3（實際 ${art.width.toFixed(1)}×${art.height.toFixed(1)}）`);
+    if (b.view.player.field.length < mineBefore) { must(q('#lost-note'), '我方角色退場時要有「⚠ 你的 X 退場了」提示'); log.push(`退場提示：${q('#lost-note').textContent}`); }
+    log.push(`攻擊後中毒標示：${qa('.card .poison').map((e) => e.textContent).join(',')}`);
+  } else if (name === 'heal') {
+    qa('.my-field .card.playable')[0].click(); await sleep(50);
+    const act = qa('.sheet .act:not(.disabled)').find((x) => x.textContent.includes('療傷')); must(act, '醫者有「療傷」技能按鈕'); act.click(); await sleep(200);
+    must(qa('.card .convalesce').length === 1, '療傷中的角色卡面要標「療傷中・剩 N 回合」');
+    log.push(`療傷標示：${q('.card .convalesce').textContent}`);
+    noMissing('療傷後');
+  } else if (name === 'dodge') {
+    for (let i = 0; i < 60 && !(b.view.phase === 'response' && b.view.activeSide === 'enemy' && (b.view.combat?.attackers?.length ?? 0) > 0); i++) { (q('.decision') ?? q('#btn-pass'))?.click(); await sleep(30); }
+    must(q('#defend-info'), '對手出手後要有防守摘要');
+    must(!/某個角色/.test(q('#defend-info').innerText), `摘要不能出現佔位字「某個角色」（實際：${q('#defend-info').innerText.replace(/\n/g, ' ')}）`);
+    log.push(`閃前：${q('#defend-info').innerText.replace(/\n/g, ' ').slice(0, 140)}`);
+    let n = 0;
+    while (b.snap.legal.some((a) => a.dodge) && n++ < 3) { q('.decision').click(); await sleep(80); const t = q('#defend-info')?.innerText ?? ''; must(/→ 你的主建築物/.test(t), `閃開後摘要要出現「→ 你的主建築物」（實際：${t.replace(/\n/g, ' ')}）`); }
+    if (!b.snap.legal.some((a) => a.dodge)) must(qa('.my-field .card.targeted').length === 0, '全部閃開後，原目標不能還標著被攻擊的紅虛線框');
+    log.push(`閃了 ${n} 次後：${(q('#defend-info')?.innerText ?? '').replace(/\n/g, ' ').slice(0, 160)}`);
+  } else if (name === 'formation') {
+    qa('.hand .card.playable')[0].click(); await sleep(50);
+    const cast = qa('.sheet .act:not(.disabled)').find((x) => x.textContent.includes('站上陣位')) ?? q('.sheet .act:not(.disabled)'); cast.click(); await sleep(200);
+    noMissing('打出陣圖後');
+    must(/陣：守窟陣（(陣位：|已啟動)/.test(document.body.innerText), `己方資訊要寫出陣圖與陣位（實際：${(document.body.innerText.match(/陣：.{0,30}/) ?? ['沒有'])[0]}）`);
+    log.push(`陣圖顯示：${(document.body.innerText.match(/陣：.{0,30}/) ?? [''])[0]}；按鈕：${qa('.decision').map((x) => x.textContent).join('／')}`);
+  }
+}
+
 async function scenarioHumanDefend(log) {
   await startFixedBattle('crane', 'wolf');
   for (let i = 0; i < 1500; i++) {
@@ -245,6 +359,8 @@ async function scenarioHumanDefend(log) {
       const lines = window.__battle.logLines.slice(-6).join(' ');
       must(lines.includes('閃開'), `按下去要有「閃開」紀錄（實際：${lines}）`);
       log.push(`按閃之後：${window.__battle.logLines.slice(-2).join('；')}`);
+      await null; const after = q('#defend-info');
+      if (after) { must(/→ 你的主建築物/.test(after.innerText), `閃開之後摘要要把那一擊改成「→ 你的主建築物」（實際：${after.innerText.replace(/\n/g, ' ')}）`); log.push(`閃後摘要：${after.innerText.replace(/\n/g, ' ').slice(0, 120)}`); }
       return;
     }
     stepStrong();
@@ -337,7 +453,7 @@ async function scenarioBuild(log) {
 async function runScenario() {
   const name = new URLSearchParams(location.search).get('autotest');
   if (name?.startsWith('shot-')) return runShot(name.slice(5));
-  if (!['battle', 'human-attack', 'human-defend', 'idle-base', 'build', 'fuzz'].includes(name)) return;
+  if (!['battle', 'human-attack', 'human-defend', 'idle-base', 'gear', 'scn', 'build', 'fuzz'].includes(name)) return;
   const log = [`scenario=${name}`];
   try {
     if (name === 'battle') await scenarioBattle(log);
@@ -345,6 +461,8 @@ async function runScenario() {
     else if (name === 'human-attack') await scenarioHumanAttack(log);
     else if (name === 'human-defend') await scenarioHumanDefend(log);
     else if (name === 'idle-base') await scenarioIdleBase(log);
+    else if (name === 'gear') await scenarioGear(log);
+    else if (name === 'scn') await scenarioFixed(log);
     else if (name === 'build') await scenarioBuild(log);
     report(log, true);
   } catch (err) { log.push(String(err.stack ?? err), `引擎局面：${(() => { try { const v = window.__engine.call({ cmd: 'state' }).view; return `acting=${v.acting} phase=${v.phase} active=${v.activeSide} turn=${v.turn}/${v.enemyTurn} UI=${window.__battle?.view?.acting}/${window.__battle?.view?.phase}`; } catch (e) { return String(e); } })()}`, `頁面文字：${document.body.innerText.slice(0, 200).replace(/\n/g, ' ')}`); report(log, false); }
